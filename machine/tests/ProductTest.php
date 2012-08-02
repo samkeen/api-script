@@ -17,13 +17,32 @@ class ProductTest extends BaseTestCase
 
     function testGetAll()
     {
-        $this
-            ->service(self::FENPHEN)
-            ->assert_api_get('/product');
+        $resources = $this->service(self::FENPHEN)
+            ->assert_api_get(
+                '/product',
+                array('name'),
+                $empty_response_allowed=true
+            );
+    }
+    function testGetCreatedResource()
+    {
+        $created_resource = $this->service(self::FENPHEN)
+            ->assert_api_post(
+            '/product',
+            array('name' => uniqid('bob-')),
+            $clean_up = false
+        );
+        $resources = $this->service(self::FENPHEN)
+            ->assert_api_get(
+                "/product/{$created_resource['id']}",
+                array('name'),
+                $empty_response_allowed=true,
+                $expected_count = 1
+            );
     }
     function testPost()
     {
-        $this->service(self::FENPHEN)
+        $created_resource = $this->service(self::FENPHEN)
             ->assert_api_post(
                 '/product',
                 array('name' => uniqid('bob-'))
@@ -31,12 +50,11 @@ class ProductTest extends BaseTestCase
     }
     function testDelete()
     {
-        $this->service(self::FENPHEN)
+        $created_resource = $this->service(self::FENPHEN)
             ->assert_api_post(
                 '/product',
                 array('name' => uniqid('bob-'))
             );
-        $created_resource = $this->get_created_resource();
         $this->service(self::FENPHEN)
             ->assert_api_delete(
                 "/product/{$created_resource['id']}"
@@ -44,12 +62,12 @@ class ProductTest extends BaseTestCase
     }
     function testPatch()
     {
-        $this->service(self::FENPHEN)
+        $created_resource = $this->service(self::FENPHEN)
             ->assert_api_post(
             '/product',
-            array('name' => uniqid('bob-'))
+            array('name' => uniqid('bob-')),
+            $clean_up = false
         );
-        $created_resource = $this->get_created_resource();
         $this->service(self::FENPHEN)
             ->assert_api_patch(
                 "/product/{$created_resource['id']}",
@@ -58,12 +76,12 @@ class ProductTest extends BaseTestCase
     }
     function testPut()
     {
-        $this->service(self::FENPHEN)
+        $created_resource = $this->service(self::FENPHEN)
             ->assert_api_post(
-            '/product',
-            array('name' => uniqid('bob-'))
-        );
-        $created_resource = $this->get_created_resource();
+                '/product',
+                array('name' => uniqid('bob-')),
+                $clean_up = false
+            );
         $created_resource['name'] = uniqid('bob-new-');
         $this->service(self::FENPHEN)
             ->assert_api_put(

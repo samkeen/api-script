@@ -17,11 +17,6 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
     private $conf = array();
 
     /**
-     * After a POST the returned resource set here.
-     * @var array
-     */
-    private $created_resource = null;
-    /**
      * @var ApiHelper
      */
     private $api_helper = null;
@@ -44,7 +39,22 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         return $this;
     }
 
-    protected function assert_api_post($request_path, array $payload=array())
+    /**
+     * This method
+     *   - builds, send, and gathers the response for the cURL POST request
+     *   - Asserts the HTTP response code is 201
+     *   - Asserts the HTTP response entity body is not empty
+     *   - Asserts that the created Resource contains the property keys of the supplied
+     *     $payload
+     *   - If $cleanup=true, it sends an HTTP DELETE request for the created Resource
+     *
+     * @param string $request_path
+     * @param array $payload The array of property values to be sent with the POST request
+     * @param bool $cleanup If true a Delete request is sent after making assertions concerning
+     * the POST Resource creation
+     * @return array The returned Resource from the web service
+     */
+    protected function assert_api_post($request_path, array $payload=array(), $cleanup=true)
     {
         $this->requested_service_http_method = 'POST';
         $service_meta = $this->get_service_meta($this->requested_service_name);
@@ -54,16 +64,33 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         $this->requested_service_response = $this->api_helper->api_post(
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
-        $this->created_resource = json_decode($this->requested_service_response['body'], true);
+        $created_resource = json_decode($this->requested_service_response['body'], true);
         $this->assert_response_code(201);
-        // perform POST
-        // assert 201 response
-        // assert response not empty
-        // assert response array has keys of payload
-        // assert response array values match $payload values
-        // return generated identifier (id)
+        $this->assertNotEmpty($created_resource, "The created Resource was found to be Empty");
+        $this->assert_resource_contains_expected_properties($created_resource, array_keys($payload));
+        if($cleanup)
+        {
+            $this->cleanup_resource($request_path, $created_resource);
+        }
+        return $created_resource;
     }
-    protected function assert_api_get($request_path)
+
+    /**
+     * This Method
+     *   - builds, send, and gathers the response for the cURL GET request
+     *   - asserts the HTTP response code is 200
+     *   - if expecting a response ($empty_response_allowed=false), asserts response is not empty
+     *   - if $expected_count supplies, that count is asserted
+     *   - for the returned resource, assert that it has the properties of the sent payload
+     *
+     * @param string $request_path
+     * @param array $expected_property_keys
+     * @param bool $empty_response_allowed
+     * @param null|int $expected_count
+     * @return array The Resources returned by the Web Service
+     */
+    protected function assert_api_get(
+        $request_path, array $expected_property_keys=array(), $empty_response_allowed=true, $expected_count=null)
     {
         $this->requested_service_http_method = 'GET';
         $service_meta = $this->get_service_meta($this->requested_service_name);
@@ -73,12 +100,40 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         $this->requested_service_response = $this->api_helper->api_get(
             $this->requested_service_full_uri, $service_meta['username'], $service_meta['password']
         );
+        $retrieved_resources = json_decode($this->requested_service_response['body'], true);
         $this->assert_response_code(200);
-        // perform GET
-        // assert 200 response
-        // assert not empty response
-        // assert has $expected_keys
+        if( ! $empty_response_allowed && ! $retrieved_resources)
+        {
+            $this->fail("The param: \$empty_response_allowed was false and the response body was empty");
+        }
+        if($empty_response_allowed && empty($retrieved_resources) && $expected_count===null)
+        {
+            $expected_count = 0;
+        }
+        if($expected_count!==null)
+        {
+            $actual_count = count($retrieved_resources);
+            $this->assertEquals($expected_count, $actual_count,
+                "Expected count of returned Resources was: {$expected_count}, actual count was: {$actual_count}"
+                ."Retrieved Resources: ".print_r($retrieved_resources, true)
+            );
+        }
+        if($retrieved_resources && $expected_property_keys)
+        {
+            $this->assert_resource_contains_expected_properties($retrieved_resources[0], $expected_property_keys);
+        }
+        return $retrieved_resources;
     }
+
+    /**
+     * This method
+     *   - builds, send, and gathers the response for the cURL PUT request
+     *   - asserts the HTTP response code is 204
+     *   - assert the response body is empty
+     *
+     * @param string $request_path
+     * @param array $payload
+     */
     protected function assert_api_put($request_path, array $payload=array())
     {
         $this->requested_service_http_method = 'PUT';
@@ -90,14 +145,18 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
         $this->assert_response_code(204);
-        // perform PUT
-        // A. assert 204 response
-        //    assert empty response
-        //    assert has $expected_keys
-        // B. perform GET
-        //    assert 200 response
-        //    assert field has expected mutation
+        $this->assertEmpty($this->requested_service_response['body']);
     }
+
+    /**
+     * This Method
+     *   - builds, send, and gathers the response for the cURL PATCH request
+     *   - asserts the HTTP response code is 204
+     *   - assert the response body is empty
+     *
+     * @param string $request_path
+     * @param array $payload
+     */
     protected function assert_api_patch($request_path, array $payload=array())
     {
         $this->requested_service_http_method = 'PATCH';
@@ -109,14 +168,16 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
         $this->assert_response_code(204);
-        // perform PATCH
-        // A. assert 204 response
-        //    assert empty response
-        //    assert has $expected_keys
-        // B. perform GET
-        //    assert 200 response
-        //    assert field has expected mutation
+        $this->assertEmpty($this->requested_service_response['body']);
     }
+
+    /**
+     * - builds, send, and gathers the response for the cURL DELETE request
+     *   - asserts the HTTP response code is 204
+     *   - assert the response body is empty
+     *
+     * @param string $request_path
+     */
     protected function assert_api_delete($request_path)
     {
         $this->requested_service_http_method = 'DELETE';
@@ -129,16 +190,12 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         );
         $this->assert_response_code(204);
         $this->assertEmpty($this->requested_service_response['body']);
-        // perform DELETE
-        // A. assert 204 response
-        //    assert empty response
-        // B. perform GET
-        //    assert 404
     }
-    protected function get_created_resource()
-    {
-        return $this->created_resource;
-    }
+
+    /**
+     * @param array $conf
+     * @throws \ErrorException
+     */
     private function validate_conf(array $conf = array())
     {
         foreach ($conf as $host_name => $host_meta) {
@@ -168,8 +225,13 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
                 throw new \ErrorException("`username` and/or `password` key missing for host [{$host_name}] from conf-blackbox.php");
             }
         }
-
     }
+    /**
+     * @param string $base_domain_path ex: "http://localhost/fen-phen/?_wrap_array=1&__c=/"
+     * @param string $request_path ex: "/product"
+     * @param string $api_path_prefix ex: "/api/v1"
+     * @return string
+     */
     private function build_full_path($base_domain_path, $request_path, $api_path_prefix)
     {
         $request_path = "/".ltrim($request_path, ' /');
@@ -179,6 +241,11 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             : '';
         return "{$base_service_path}{$api_prefix_path}{$request_path}";
     }
+    /**
+     * @param string $host_name
+     * @return array|null
+     * @throws \ErrorException
+     */
     private function get_service_meta($host_name)
     {
         $service_meta = isset($this->conf[$host_name]) ? $this->conf[$host_name] : null;
@@ -191,6 +258,13 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         }
         return $service_meta;
     }
+
+    /**
+     * Used for testing for error conditions
+     *
+     * @param $response
+     * @return mixed|string
+     */
     private function get_expected_response_error($response)
     {
         $error_response = '';
@@ -215,6 +289,47 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             }
         }
         return $error_response;
+    }
+    /**
+     * Issue a DELETE request for the given $created_resource
+     *
+     * @param string $request_path
+     * @param array $created_resource
+     */
+    protected function cleanup_resource($request_path, $created_resource)
+    {
+        $this->assert_api_delete("{$request_path}/{$created_resource['id']}");
+    }
+    protected function evaluate_property_values(array $properties)
+    {
+        foreach ($properties as $property_key => &$property_value) {
+            if(substr(strtolower(trim($property_value)), 0, 5) == 'php::')
+            {
+                $match = null;
+                $eval_function = trim(substr($property_value, 5),' ;');
+                preg_match('/^(?P<function_name>[^\(]+)/', $eval_function, $match);
+                if( ! $match['function_name'])
+                {
+                    $this->fail("The php eval property value: [{$property_key}] => '{$property_value}' is malformed");
+                }
+                if( ! function_exists($match['function_name']))
+                {
+                    $this->fail("The the function name ['{$match['function_name']}'] from the php eval property value: '{$property_key}: {$property_value}' is unknown");
+                }
+                $property_value = eval("return {$eval_function};");
+            }
+            return $properties;
+        }
+    }
+    private function assert_resource_contains_expected_properties($created_resource, $expected_properties)
+    {
+        if($missing = array_diff($expected_properties, array_keys($created_resource)))
+        {
+            $this->fail("Of the expected properties [".implode(',', $expected_properties)."]"
+                . " these properties were not found [".implode(',', $missing)."]"
+                . " in the created resource: ".print_r($created_resource, true)
+            );
+        }
     }
     private function assert_response_code($code)
     {

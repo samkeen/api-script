@@ -1,0 +1,53 @@
+# Fenphen Service
+
+# for any interaction (PUT|PATCH|DELETE) with a Resource, there must
+#   first be a Resource, these are the properties to use to create those
+#   sacrificial Resources
+# ex: For a Get tests, the test framework:
+#   - first creates a Resource (POST)
+#   - then runs the Get under test
+#   - finally the test framework issues a Delete request for cleanup
+resource_seeds:
+  product:
+    name: php::uniqid()
+tests:
+    get all product:
+      comment: just ensure the get all URL, '/product' returns 200
+      method: get
+      path: /product
+
+    get product:
+      comment: Create a product(POST) then assert you can GET it
+      method: create-get
+      path: /product
+      creation_properties:
+        name: php::uniqid()
+      expected_properties:
+        - id
+        - name
+        - created
+        - modified
+
+    post product:
+      comment: Test the successful POST of a product
+      method: post
+      path: /product
+      creation_properties:
+        name: php::uniqid()
+
+    delete product:
+      comment: Test the successful DELETE of a product
+      method: delete
+      path: /product
+      creation_properties:
+        name: php::uniqid()
+
+    patch product:
+      comment: Test the successful DELETE of a product
+      method: patch
+      path: /product
+      creation_properties:
+        name: php::uniqid()
+      patch_properties:
+        name: php::uniqid()
+
