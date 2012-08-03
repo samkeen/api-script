@@ -13,6 +13,12 @@ resource_seeds:
     name: php::uniqid()
 
 tests:
+    # test names need to be in the format:
+    # '{http method} ... {path}'
+    #
+    # start/end slashes are optional for {path}
+    # i.e 'product', '/product' and '/product' are all parsed as: '/product
+    #'
     GET all product:
       comment: just ensure the get all URL, '/product' returns 200
 

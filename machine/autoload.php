@@ -8,8 +8,8 @@ spl_autoload_register(
         if ($classes === null) {
             $classes = array(
                 'deustesting\\apihelper' => '/lib/APIHelper.php',
-                'deustesting\\basetestcase' => '/BaseTestCase.php',
-                'deustesting\\producttest' => '/tests/ProductTest.php'
+                'deustesting\\testdriver' => '/lib/TestDriver.php',
+                'deustesting\\testengine' => '/lib/TestEngine.php'
             );
         }
         $cn = strtolower($class);
