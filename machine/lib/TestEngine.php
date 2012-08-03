@@ -11,6 +11,8 @@ class TestEngine
     private $requested_service_full_uri = null;
     private $services_meta = array();
 
+    private $verbose = false;
+
     private $failures = array();
 
     /**
@@ -18,8 +20,9 @@ class TestEngine
      */
     private $api_helper = null;
 
-    function __construct($conf_files_directory)
+    function __construct($conf_files_directory, $verbose)
     {
+        $this->verbose = $verbose;
         $services_meta_file_path = "{$conf_files_directory}/services.yaml";
         if( ! file_exists($services_meta_file_path) || ! is_readable($services_meta_file_path))
         {
@@ -62,9 +65,9 @@ class TestEngine
         );
         $created_resource = json_decode($this->requested_service_response['body'], true);
         $this->assert_response_code(201, 'POST');
-        $this->assertNotEmpty($created_resource, "The created Resource was found to be Empty");
+        $this->assert_not_empty($created_resource, "The created Resource was found to be Empty");
         $this->assert_resource_contains_expected_properties($created_resource, array_keys($payload));
-        if($cleanup)
+        if(isset($created_resource['id']) && $cleanup)
         {
             $this->cleanup_resource($request_path, $created_resource);
         }
@@ -108,7 +111,7 @@ class TestEngine
         if($expected_count!==null)
         {
             $actual_count = count($retrieved_resources);
-            $this->assertEquals($expected_count, $actual_count,
+            $this->assert_equals($expected_count, $actual_count,
                 "Expected count of returned Resources was: {$expected_count}, actual count was: {$actual_count}"
                 ."Retrieved Resources: ".print_r($retrieved_resources, true)
             );
@@ -139,7 +142,7 @@ class TestEngine
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
         $this->assert_response_code(204, 'PUT');
-        $this->assertEmpty($this->requested_service_response['body']);
+        $this->assert_empty($this->requested_service_response['body']);
     }
 
     /**
@@ -161,7 +164,7 @@ class TestEngine
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
         $this->assert_response_code(204, 'PATCH');
-        $this->assertEmpty($this->requested_service_response['body']);
+        $this->assert_empty($this->requested_service_response['body']);
     }
 
     /**
@@ -181,7 +184,7 @@ class TestEngine
             $this->requested_service_full_uri, $service_meta['username'], $service_meta['password']
         );
         $this->assert_response_code(204, 'DELETE');
-        $this->assertEmpty($this->requested_service_response['body']);
+        $this->assert_empty($this->requested_service_response['body']);
     }
 
     /**
@@ -315,7 +318,7 @@ class TestEngine
     }
     function fail($message)
     {
-        self::emit($message);
+        $this->emit($message);
         $this->add_failure($message);
     }
     private function assert_resource_contains_expected_properties($created_resource, $expected_properties)
@@ -330,7 +333,7 @@ class TestEngine
     }
     private function assert_response_code($code, $request_type)
     {
-        $this->assertEquals(
+        $this->assert_equals(
             $code,
             $this->requested_service_response['code'],
             "The HTTP response code for this {$request_type} request [{$this->requested_service_full_uri}] should have been {$code}, "
@@ -341,10 +344,13 @@ class TestEngine
 
     function emit($string)
     {
-        echo trim($string).PHP_EOL;
+        if($this->verbose)
+        {
+            echo trim($string).PHP_EOL;
+        }
     }
 
-    private function assertNotEmpty($value, $message=null)
+    private function assert_not_empty($value, $message=null)
     {
         if(empty($value))
         {
@@ -352,7 +358,7 @@ class TestEngine
             $this->fail($message);
         }
     }
-    private function assertEmpty($value, $message=null)
+    private function assert_empty($value, $message=null)
     {
         if( ! empty($value))
         {
@@ -360,7 +366,7 @@ class TestEngine
             $this->fail($message);
         }
     }
-    private function assertEquals($value1, $value2, $message=null)
+    private function assert_equals($value1, $value2, $message=null)
     {
         if( ! $value1 == $value2)
         {

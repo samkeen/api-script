@@ -13,9 +13,9 @@ class TestDriver
     private $start_time;
     private $test_engine = null;
 
-    public function __construct($conf_files_directory)
+    public function __construct($conf_files_directory, $verbose=false)
     {
-        $this->test_engine = new TestEngine($conf_files_directory);
+        $this->test_engine = new TestEngine($conf_files_directory, $verbose);
         // gather manifests
         $manifest_files = glob("{$conf_files_directory}/tests.*.yaml");
         foreach($manifest_files as $manifest_file_path)
@@ -138,13 +138,16 @@ class TestDriver
     private function create_then_get_resource($path, array $creation_properties, array $expected_properties=array())
     {
         $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        $this->test_engine->assert_api_get(
-            "{$path}/{$created_resource['id']}",
-            $expected_properties,
-            $empty_response_allowed=true,
-            $expected_count = 1
-        );
-        $this->test_engine->cleanup_resource($path, $created_resource);
+        if($created_resource['id'])
+        {
+            $this->test_engine->assert_api_get(
+                "{$path}/{$created_resource['id']}",
+                $expected_properties,
+                $empty_response_allowed=true,
+                $expected_count = 1
+            );
+            $this->test_engine->cleanup_resource($path, $created_resource);
+        }
     }
 
     /**
@@ -166,9 +169,12 @@ class TestDriver
     private function delete_resource($path, array $creation_properties)
     {
         $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        $this->test_engine->assert_api_delete(
-            "{$path}/{$created_resource['id']}"
-        );
+        if(isset($created_resource['id']))
+        {
+            $this->test_engine->assert_api_delete(
+                "{$path}/{$created_resource['id']}"
+            );
+        }
     }
 
     /**
@@ -179,10 +185,13 @@ class TestDriver
     private function patch_resource($path, array $creation_properties, array $patch_properties)
     {
         $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        $this->test_engine->assert_api_patch(
-            "{$path}/{$created_resource['id']}",
-            $this->test_engine->evaluate_property_values($patch_properties)
-        );
+        if(isset($created_resource['id']))
+        {
+            $this->test_engine->assert_api_patch(
+                "{$path}/{$created_resource['id']}",
+                $this->test_engine->evaluate_property_values($patch_properties)
+            );
+        }
     }
 
     /**
@@ -193,11 +202,14 @@ class TestDriver
     private function put_resource($path, array $creation_properties, array $put_properties)
     {
         $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        $put_properties = $this->test_engine->evaluate_property_values($put_properties);
-        $this->test_engine->assert_api_put(
-            "{$path}/{$created_resource['id']}",
-            array_merge($created_resource, $put_properties)
-        );
+        if(isset($created_resource['id']))
+        {
+            $put_properties = $this->test_engine->evaluate_property_values($put_properties);
+            $this->test_engine->assert_api_put(
+                "{$path}/{$created_resource['id']}",
+                array_merge($created_resource, $put_properties)
+            );
+        }
     }
 
     /**
