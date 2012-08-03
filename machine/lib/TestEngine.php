@@ -1,40 +1,36 @@
 <?php
+namespace DeusTesting;
 /**
  *
  */
-namespace DeusTesting;
-
-require_once __DIR__ . "/autoload.php";
-require_once __DIR__ . "/../vendor/spyc/spyc.php";
-
-class BaseTestCase extends \PHPUnit_Framework_TestCase
+class TestEngine
 {
-    const FENPHEN = 'fenphen';
 
     private $requested_service_name = null;
-    private $requested_service_http_method = null;
     private $requested_service_response = null;
     private $requested_service_full_uri = null;
-    private $conf = array();
+    private $services_meta = array();
+
+    private $failures = array();
 
     /**
      * @var ApiHelper
      */
     private $api_helper = null;
 
-    protected function setUp()
+    function __construct($conf_files_directory)
     {
-        $conf_file_path = __DIR__."/conf/services.yaml";
-        if( ! file_exists($conf_file_path) || ! is_readable($conf_file_path))
+        $services_meta_file_path = "{$conf_files_directory}/services.yaml";
+        if( ! file_exists($services_meta_file_path) || ! is_readable($services_meta_file_path))
         {
-            throw new \ErrorException("Conf file not found and/or not readable at: {$conf_file_path}");
+            throw new \ErrorException("Conf file not found and/or not readable at: {$services_meta_file_path}");
         }
-        $this->conf = \Spyc::YAMLLoad($conf_file_path);;
-        $this->validate_conf($this->conf);
+        $this->services_meta = \Spyc::YAMLLoad($services_meta_file_path);;
+        $this->validate_conf($this->services_meta);
         $this->api_helper = new ApiHelper();
     }
 
-    protected function service($service_name)
+    function service($service_name)
     {
         $this->requested_service_name = $service_name;
         return $this;
@@ -55,9 +51,8 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      * the POST Resource creation
      * @return array The returned Resource from the web service
      */
-    protected function assert_api_post($request_path, array $payload=array(), $cleanup=true)
+    function assert_api_post($request_path, array $payload=array(), $cleanup=true)
     {
-        $this->requested_service_http_method = 'POST';
         $service_meta = $this->get_service_meta($this->requested_service_name);
         $this->requested_service_full_uri = $this->build_full_path(
             $service_meta['base_domain_path'], $request_path, $service_meta['api_prefix_path']
@@ -66,7 +61,7 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
         $created_resource = json_decode($this->requested_service_response['body'], true);
-        $this->assert_response_code(201);
+        $this->assert_response_code(201, 'POST');
         $this->assertNotEmpty($created_resource, "The created Resource was found to be Empty");
         $this->assert_resource_contains_expected_properties($created_resource, array_keys($payload));
         if($cleanup)
@@ -90,10 +85,9 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      * @param null|int $expected_count
      * @return array The Resources returned by the Web Service
      */
-    protected function assert_api_get(
+    function assert_api_get(
         $request_path, array $expected_property_keys=array(), $empty_response_allowed=true, $expected_count=null)
     {
-        $this->requested_service_http_method = 'GET';
         $service_meta = $this->get_service_meta($this->requested_service_name);
         $this->requested_service_full_uri = $this->build_full_path(
             $service_meta['base_domain_path'], $request_path, $service_meta['api_prefix_path']
@@ -102,7 +96,7 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             $this->requested_service_full_uri, $service_meta['username'], $service_meta['password']
         );
         $retrieved_resources = json_decode($this->requested_service_response['body'], true);
-        $this->assert_response_code(200);
+        $this->assert_response_code(200, 'GET');
         if( ! $empty_response_allowed && ! $retrieved_resources)
         {
             $this->fail("The param: \$empty_response_allowed was false and the response body was empty");
@@ -135,9 +129,8 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      * @param string $request_path
      * @param array $payload
      */
-    protected function assert_api_put($request_path, array $payload=array())
+    function assert_api_put($request_path, array $payload=array())
     {
-        $this->requested_service_http_method = 'PUT';
         $service_meta = $this->get_service_meta($this->requested_service_name);
         $this->requested_service_full_uri = $this->build_full_path(
             $service_meta['base_domain_path'], $request_path, $service_meta['api_prefix_path']
@@ -145,7 +138,7 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         $this->requested_service_response = $this->api_helper->api_patch(
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
-        $this->assert_response_code(204);
+        $this->assert_response_code(204, 'PUT');
         $this->assertEmpty($this->requested_service_response['body']);
     }
 
@@ -158,9 +151,8 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      * @param string $request_path
      * @param array $payload
      */
-    protected function assert_api_patch($request_path, array $payload=array())
+    function assert_api_patch($request_path, array $payload=array())
     {
-        $this->requested_service_http_method = 'PATCH';
         $service_meta = $this->get_service_meta($this->requested_service_name);
         $this->requested_service_full_uri = $this->build_full_path(
             $service_meta['base_domain_path'], $request_path, $service_meta['api_prefix_path']
@@ -168,7 +160,7 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         $this->requested_service_response = $this->api_helper->api_patch(
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
-        $this->assert_response_code(204);
+        $this->assert_response_code(204, 'PATCH');
         $this->assertEmpty($this->requested_service_response['body']);
     }
 
@@ -179,9 +171,8 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      *
      * @param string $request_path
      */
-    protected function assert_api_delete($request_path)
+    function assert_api_delete($request_path)
     {
-        $this->requested_service_http_method = 'DELETE';
         $service_meta = $this->get_service_meta($this->requested_service_name);
         $this->requested_service_full_uri = $this->build_full_path(
             $service_meta['base_domain_path'], $request_path, $service_meta['api_prefix_path']
@@ -189,7 +180,7 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
         $this->requested_service_response = $this->api_helper->api_delete(
             $this->requested_service_full_uri, $service_meta['username'], $service_meta['password']
         );
-        $this->assert_response_code(204);
+        $this->assert_response_code(204, 'DELETE');
         $this->assertEmpty($this->requested_service_response['body']);
     }
 
@@ -249,12 +240,12 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      */
     private function get_service_meta($host_name)
     {
-        $service_meta = isset($this->conf[$host_name]) ? $this->conf[$host_name] : null;
+        $service_meta = isset($this->services_meta[$host_name]) ? $this->services_meta[$host_name] : null;
         if( ! $service_meta)
         {
             throw new \ErrorException(
                 "no service meta found for service name: [{$host_name}] in conf-blackbox.php.\n"
-                    ."Known service host names: ".implode(",", array_keys($this->conf))
+                    ."Known service host names: ".implode(",", array_keys($this->services_meta))
             );
         }
         return $service_meta;
@@ -297,11 +288,11 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      * @param string $request_path
      * @param array $created_resource
      */
-    protected function cleanup_resource($request_path, $created_resource)
+    function cleanup_resource($request_path, $created_resource)
     {
         $this->assert_api_delete("{$request_path}/{$created_resource['id']}");
     }
-    protected function evaluate_property_values(array $properties)
+    function evaluate_property_values(array $properties)
     {
         foreach ($properties as $property_key => &$property_value) {
             if(substr(strtolower(trim($property_value)), 0, 5) == 'php::')
@@ -319,8 +310,13 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
                 }
                 $property_value = eval("return {$eval_function};");
             }
-            return $properties;
         }
+        return $properties;
+    }
+    function fail($message)
+    {
+        self::emit($message);
+        $this->add_failure($message);
     }
     private function assert_resource_contains_expected_properties($created_resource, $expected_properties)
     {
@@ -332,14 +328,50 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
             );
         }
     }
-    private function assert_response_code($code)
+    private function assert_response_code($code, $request_type)
     {
         $this->assertEquals(
             $code,
             $this->requested_service_response['code'],
-            "The HTTP response code for this {$this->requested_service_http_method} request [{$this->requested_service_full_uri}] should have been {$code}, "
+            "The HTTP response code for this {$request_type} request [{$this->requested_service_full_uri}] should have been {$code}, "
                 ."was instead: [{$this->requested_service_response['code']}]\n"
                 ."Response __error: ".print_r($this->get_expected_response_error($this->requested_service_response['body']), true)
         );
     }
+
+    function emit($string)
+    {
+        echo trim($string).PHP_EOL;
+    }
+
+    private function assertNotEmpty($value, $message=null)
+    {
+        if(empty($value))
+        {
+            $message = $message ?: "The value was empty";
+            $this->fail($message);
+        }
+    }
+    private function assertEmpty($value, $message=null)
+    {
+        if( ! empty($value))
+        {
+            $message = $message ?: "The value [$value] was NOT empty";
+            $this->fail($message);
+        }
+    }
+    private function assertEquals($value1, $value2, $message=null)
+    {
+        if( ! $value1 == $value2)
+        {
+            $message = $message ?: "Failed asserting the {$value1} was equal to {$value2}";
+            $this->fail($message);
+        }
+    }
+
+    private function add_failure($message)
+    {
+        $this->failures[] = $message;
+    }
+
 }
