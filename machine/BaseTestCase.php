@@ -5,6 +5,7 @@
 namespace DeusTesting;
 
 require_once __DIR__ . "/autoload.php";
+require_once __DIR__ . "/../vendor/spyc/spyc.php";
 
 class BaseTestCase extends \PHPUnit_Framework_TestCase
 {
@@ -23,12 +24,12 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
 
     protected function setUp()
     {
-        $conf_file_path = __DIR__."/conf/conf.php";
+        $conf_file_path = __DIR__."/conf/services.yaml";
         if( ! file_exists($conf_file_path) || ! is_readable($conf_file_path))
         {
             throw new \ErrorException("Conf file not found and/or not readable at: {$conf_file_path}");
         }
-        $this->conf = require $conf_file_path;
+        $this->conf = \Spyc::YAMLLoad($conf_file_path);;
         $this->validate_conf($this->conf);
         $this->api_helper = new ApiHelper();
     }

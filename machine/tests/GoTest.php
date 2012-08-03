@@ -7,10 +7,8 @@ class GoTest extends BaseTestCase
 
     public static function setUpBeforeClass()
     {
-        // load YAML parser
-        require __DIR__.'/../../vendor/spyc/spyc.php';
         // gather manifests
-        $manifest_files = array_map('realpath', glob(__DIR__.'/../conf/service.*.yaml'));
+        $manifest_files = array_map('realpath', glob(__DIR__.'/../conf/tests.*.yaml'));
         foreach($manifest_files as $manifest_file_path)
         {
             $match=null;
@@ -34,43 +32,71 @@ class GoTest extends BaseTestCase
         self::emit("Running tests for: '{$service_name}'");
         foreach($service_manifest['tests'] as $test_name => $test_meta)
         {
-            switch(strtolower($test_meta['method']))
+            $path = $this->get_path_from_name($test_name);
+            switch($this->get_method_from_name($test_name))
             {
                 case "get":
-                    self::emit("Running GET Test: '{$test_name}' ({$test_meta['comment']})");
-                    $this->get_all($test_meta['path']);
-                    break;
-                case "create-get":
-                    self::emit("Running Create Then GET Test: '{$test_name}' ({$test_meta['comment']})");
-                    $this->create_then_get_resource(
-                        $test_meta['path'],
-                        $test_meta['creation_properties'],
-                        $test_meta['expected_properties']
-                    );
+                    if(isset($test_meta['creation_properties']))
+                    {
+                        $creation_properties = $this->get_blended_evaluated_creation_properties(
+                            $service_manifest, $path, $test_meta
+                        );
+                        self::emit("Running Create Then GET Test: '{$test_name}' ({$test_meta['comment']})");
+                        $this->create_then_get_resource(
+                            $path,
+                            $creation_properties,
+                            $test_meta['expected_properties']
+                        );
+                    }
+                    else
+                    {
+                        self::emit("Running GET Test: '{$test_name}' ({$test_meta['comment']})");
+                        $this->get_all($path);
+                    }
                     break;
                 case "post":
                     self::emit("Running POST Test: '{$test_name}' ({$test_meta['comment']})");
+                    $creation_properties = $this->get_blended_evaluated_creation_properties(
+                        $service_manifest, $path, $test_meta
+                    );
                     $this->post_resource(
-                        $test_meta['path'],
-                        $test_meta['creation_properties']
+                        $path,
+                        $creation_properties
                     );
                     break;
                 case "delete":
                     self::emit("Running DELETE Test: '{$test_name}' ({$test_meta['comment']})");
+                    $creation_properties = $this->get_blended_evaluated_creation_properties(
+                        $service_manifest, $path, $test_meta
+                    );
                     $this->delete_resource(
-                        $test_meta['path'],
-                        $test_meta['creation_properties']
+                        $path,
+                        $creation_properties
                     );
                     break;
                 case "patch":
                     self::emit("Running PATCH Test: '{$test_name}' ({$test_meta['comment']})");
+                    $creation_properties = $this->get_blended_evaluated_creation_properties(
+                        $service_manifest, $path, $test_meta
+                    );
                     $this->patch_resource(
-                        $test_meta['path'],
-                        $test_meta['creation_properties'],
+                        $path,
+                        $creation_properties,
                         $test_meta['patch_properties']
                     );
                     break;
 
+                case "put":
+                    self::emit("Running PUT Test: '{$test_name}' ({$test_meta['comment']})");
+                    $creation_properties = $this->get_blended_evaluated_creation_properties(
+                        $service_manifest, $path, $test_meta
+                    );
+                    $this->put_resource(
+                        $path,
+                        $creation_properties,
+                        $test_meta['put_properties']
+                    );
+                    break;
             }
         }
         print_r($service_manifest);
@@ -127,6 +153,17 @@ class GoTest extends BaseTestCase
         );
     }
 
+    private function put_resource($path, $creation_properties, $put_properties)
+    {
+        $created_resource = $this->create_resource_for_testing($path, $creation_properties);
+        $put_properties = $this->evaluate_property_values($put_properties);
+        $this->service(self::FENPHEN)
+            ->assert_api_put(
+            "{$path}/{$created_resource['id']}",
+            array_merge($created_resource, $put_properties)
+        );
+    }
+
     private function create_resource_for_testing($path, $creation_properties)
     {
         return $this->service(self::FENPHEN)
@@ -140,5 +177,36 @@ class GoTest extends BaseTestCase
     private static function emit($string)
     {
         echo trim($string).PHP_EOL;
+    }
+    private function get_method_from_name($test_name)
+    {
+        $match = null;
+        preg_match('/^(?P<method>head|options|get|post|put|patch|delete)/i', $test_name, $match);
+        if( ! isset($match['method']))
+        {
+            $this->fail("HTTP Method (head|options|get|post|put|patch|delete) not found at the beginning of test name: '{$test_name}'");
+        }
+        return strtolower($match['method']);
+    }
+    private function get_path_from_name($test_name)
+    {
+        $match = null;
+        preg_match('/\s(?P<path>[^\s]+)$/i', $test_name, $match);
+        if( ! isset($match['path']))
+        {
+            $this->fail("HTTP path not found at the end of test name: '{$test_name}'");
+        }
+        return "/".trim($match['path'], '/ ');
+    }
+    private function get_evaluated_creation_properties($default_creation_properties, $creation_properties)
+    {
+        return $this->evaluate_property_values(array_merge($default_creation_properties, $creation_properties));
+    }
+    private function get_blended_evaluated_creation_properties($service_manifest, $path, $test_meta)
+    {
+        return $this->get_evaluated_creation_properties(
+            isset($service_manifest['resource_seeds'][$path])?$service_manifest['resource_seeds'][$path]:array(),
+            isset($test_meta['creation_properties'])?$test_meta['creation_properties']:array()
+        );
     }
 }

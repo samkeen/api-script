@@ -1,0 +1,12 @@
+# Format of this file is
+# {service_name}
+#     {property1}: value
+#     {property2}: value
+#     ...
+#
+# The {service_name} name HAS TO match what is in tests.{service}.yaml
+fenphen:
+  username: {{fenphen_user_name}}
+  password: {{fenphen_password}}
+  base_domain_path: {{fenphen_base_domain_path}}
+  api_prefix_path: {{fenphen_api_prefix_path}}

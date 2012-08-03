@@ -8,46 +8,33 @@
 #   - then runs the Get under test
 #   - finally the test framework issues a Delete request for cleanup
 resource_seeds:
-  product:
+  /product:
     name: php::uniqid()
-tests:
-    get all product:
-      comment: just ensure the get all URL, '/product' returns 200
-      method: get
-      path: /product
 
-    get product:
+tests:
+    GET all product:
+      comment: just ensure the get all URL, '/product' returns 200
+
+    GET product:
       comment: Create a product(POST) then assert you can GET it
-      method: create-get
-      path: /product
-      creation_properties:
-        name: php::uniqid()
       expected_properties:
         - id
         - name
         - created
         - modified
 
-    post product:
+    POST product:
       comment: Test the successful POST of a product
-      method: post
-      path: /product
-      creation_properties:
-        name: php::uniqid()
 
-    delete product:
+    DELETE product:
       comment: Test the successful DELETE of a product
-      method: delete
-      path: /product
-      creation_properties:
-        name: php::uniqid()
 
-    patch product:
-      comment: Test the successful DELETE of a product
-      method: patch
-      path: /product
-      creation_properties:
-        name: php::uniqid()
+    PATCH product:
+      comment: Test the successful PATCH of a product
       patch_properties:
         name: php::uniqid()
 
+    PUT product:
+      comment: Test the successful PUT of a product
+      put_properties:
+        name: php::uniqid()
