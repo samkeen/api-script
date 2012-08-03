@@ -10,7 +10,7 @@
 #   - finally the test framework issues a Delete request for cleanup
 resource_seeds:
   /product:
-    name: php::uniqid()
+    nameX: php::uniqid()
 
 tests:
     # test names need to be in the format:
