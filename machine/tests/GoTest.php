@@ -99,7 +99,6 @@ class GoTest extends BaseTestCase
                     break;
             }
         }
-        print_r($service_manifest);
     }
 
     private function get_all($path, array $expected_properties=array(), $empty_response_allowed=true)
