@@ -13,6 +13,9 @@ class TestDriver
     private $start_time;
     private $test_engine = null;
 
+    private $current_test_manifest;
+    private $current_test_name;
+
     public function __construct($conf_files_directory, $verbosity_level=0)
     {
         $this->test_engine = new TestEngine($conf_files_directory, $verbosity_level);
@@ -24,6 +27,7 @@ class TestDriver
             preg_match('/\.(?P<service_name>[^\.]+)\.yaml$/', $manifest_file_path, $match);
             $this->test_engine->emit_comment("Registering service: '{$match['service_name']}' (file: {$manifest_file_path})");
             self::$service_manifests[$match['service_name']] = \Spyc::YAMLLoad($manifest_file_path);
+            self::$service_manifests[$match['service_name']]['manifest_filename'] = pathinfo($manifest_file_path, PATHINFO_BASENAME);
         }
     }
 
@@ -37,17 +41,37 @@ class TestDriver
         {
             $this->execute_service_tests($service_name, $service_manifest);
         }
+        if($failures = $this->test_engine->get_failures())
+        {
+            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL . "Failure Summary:");
+            foreach($failures as $test_context => $failure_msg)
+            {
+                $failure_msg = $this->format_summary_error($failure_msg);
+                $this->test_engine->emit_summary(PHP_EOL . "\t[{$test_context}]\t\"{$failure_msg}\"");
+            }
+        }
+        if($errors = $this->test_engine->get_errors())
+        {
+            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL . "Failure Summary:");
+            foreach($errors as $test_context => $error_msg)
+            {
+                $error_msg = $this->format_summary_error($error_msg);
+                $this->test_engine->emit_summary(PHP_EOL . "\t[{$test_context}]\t\t\"{$error_msg}\"");
+            }
+        }
         $this->test_engine->emit_summary(PHP_EOL . "Run time: ".(time() - $this->start_time) . " seconds");
         $this->test_engine->emit_summary("Memory Usage: ".number_format(memory_get_peak_usage())." bytes");
     }
 
     private function execute_service_tests($service_name, $service_manifest)
     {
+        $this->current_test_manifest = $service_manifest['manifest_filename'];
         $this->test_engine->emit_summary(PHP_EOL . "Running tests for: '{$service_name}'");
         $this->test_engine->service($service_name);
         $this->test_engine->emit_summary(PHP_EOL . "Found ".count($service_manifest['tests'])." tests");
         foreach($service_manifest['tests'] as $test_name => $test_meta)
         {
+            $this->current_test_name = $test_name;
             $path = $this->get_path_from_name($test_name);
             switch($this->get_method_from_name($test_name))
             {
@@ -117,6 +141,11 @@ class TestDriver
         }
     }
 
+    private function get_test_context()
+    {
+        return "{$this->current_test_manifest}#{$this->current_test_name}";
+    }
+
     /**
      * @param string $path
      * @param array $expected_properties
@@ -135,7 +164,11 @@ class TestDriver
         }
         catch(FailException $e)
         {
-            $this->test_engine->fail($e->getMessage());
+            $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+        }
+        catch(\Exception $e)
+        {
+            $this->test_engine->error($this->get_test_context(), $e->getMessage());
         }
     }
 
@@ -163,7 +196,7 @@ class TestDriver
         }
         catch(FailException $e)
         {
-            $this->test_engine->fail($e->getMessage());
+            $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
     }
 
@@ -183,7 +216,7 @@ class TestDriver
         }
         catch(FailException $e)
         {
-            $this->test_engine->fail($e->getMessage());
+            $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
 
     }
@@ -207,7 +240,7 @@ class TestDriver
         }
         catch(FailException $e)
         {
-            $this->test_engine->fail($e->getMessage());
+            $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
     }
 
@@ -232,7 +265,7 @@ class TestDriver
         }
         catch(FailException $e)
         {
-            $this->test_engine->fail($e->getMessage());
+            $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
     }
 
@@ -258,7 +291,7 @@ class TestDriver
         }
         catch(FailException $e)
         {
-            $this->test_engine->fail($e->getMessage());
+            $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
     }
 
@@ -286,7 +319,10 @@ class TestDriver
         preg_match('/^(?P<method>head|options|get|post|put|patch|delete)/i', $test_name, $match);
         if( ! isset($match['method']))
         {
-            $this->test_engine->fail("HTTP Method (head|options|get|post|put|patch|delete) not found at the beginning of test name: '{$test_name}'");
+            $this->test_engine->fail(
+                $this->get_test_context(),
+                "HTTP Method (head|options|get|post|put|patch|delete) not found at the beginning of test name: '{$test_name}'"
+            );
         }
         return strtolower($match['method']);
     }
@@ -301,7 +337,7 @@ class TestDriver
         preg_match('/\s(?P<path>[^\s]+)$/i', $test_name, $match);
         if( ! isset($match['path']))
         {
-            $this->test_engine->fail("HTTP path not found at the end of test name: '{$test_name}'");
+            $this->test_engine->fail($this->get_test_context(), "HTTP path not found at the end of test name: '{$test_name}'");
         }
         return "/".trim($match['path'], '/ ');
     }
@@ -328,5 +364,23 @@ class TestDriver
             isset($service_manifest['resource_seeds'][$path])?$service_manifest['resource_seeds'][$path]:array(),
             isset($test_meta['creation_properties'])?$test_meta['creation_properties']:array()
         );
+    }
+    private function format_summary_error($failure_msg)
+    {
+        $fail_first_line = $fail_remaining_lines = "";
+        $failure_msg = (array)explode(PHP_EOL, $failure_msg);
+        $fail_first_line = array_shift($failure_msg);
+        if($failure_msg)
+        {
+            $failure_msg = array_map(
+                function($val)
+                {
+                    return "\t\t\t{$val}";
+                },
+                $failure_msg
+            );
+            $fail_remaining_lines = PHP_EOL . implode(PHP_EOL, $failure_msg);
+        }
+        return "{$fail_first_line} {$fail_remaining_lines}";
     }
 }
