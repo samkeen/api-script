@@ -5,6 +5,10 @@ namespace MachinaTesting;
  */
 class TestEngine
 {
+    const VERBOSE_QUIET   = -1;
+    const VERBOSE_DEFAULT = 0;
+    const VERBOSE_V       = 1;
+    const VERBOSE_VV      = 2;
 
     private $requested_service_name = null;
     private $requested_service_response = null;
@@ -88,6 +92,7 @@ class TestEngine
      * @param bool $empty_response_allowed
      * @param null|int $expected_count
      * @return array The Resources returned by the Web Service
+     * @throws FailException
      */
     function assert_api_get(
         $request_path, array $expected_property_keys=array(), $empty_response_allowed=true, $expected_count=null)
@@ -103,7 +108,7 @@ class TestEngine
         $this->assert_response_code(200, 'GET');
         if( ! $empty_response_allowed && ! $retrieved_resources)
         {
-            $this->fail("The param: \$empty_response_allowed was false and the response body was empty");
+            throw new FailException("The param: \$empty_response_allowed was false and the response body was empty");
         }
         if($empty_response_allowed && empty($retrieved_resources) && $expected_count===null)
         {
@@ -277,7 +282,7 @@ class TestEngine
             $response_array = json_decode($response, true);
             if(null === $response_array)
             {
-                $error_response = "was unable to JSON decode entity body.  Entity Body string: ".$response;
+                $error_response = "was unable to JSON decode entity body.  Entity Body: ".$response;
             }
             else if( ! array_key_exists('__error', $response_array))
             {
@@ -285,7 +290,7 @@ class TestEngine
             }
             else
             {
-                $error_response = $response_array;
+                $error_response = $response_array['__error'];
             }
         }
         return $error_response;
@@ -323,7 +328,7 @@ class TestEngine
     }
     function fail($message)
     {
-        $this->emit($message);
+        $this->emit_fail($message);
         $this->add_failure($message);
     }
     private function assert_resource_contains_expected_properties($created_resource, $expected_properties)
@@ -347,11 +352,55 @@ class TestEngine
         );
     }
 
-    function emit($string)
+    function emit_comment($string)
     {
-        if($this->verbosity_level)
+        if($this->verbosity_level >= self::VERBOSE_V)
         {
             echo trim($string).PHP_EOL;
+        }
+    }
+    function emit_detail($string)
+    {
+        if($this->verbosity_level >= self::VERBOSE_VV)
+        {
+            echo trim($string).PHP_EOL;
+        }
+    }
+    function emit_pass($string)
+    {
+        switch($this->verbosity_level)
+        {
+            case self::VERBOSE_QUIET:
+                // do nothing
+                break;
+            case self::VERBOSE_VV:
+            case self::VERBOSE_V:
+                echo trim($string).PHP_EOL;
+                break;
+            default: // VERBOSE_DEFAULT
+                echo ".";
+        }
+    }
+    function emit_fail($string)
+    {
+        switch($this->verbosity_level)
+        {
+            case self::VERBOSE_QUIET:
+                // do nothing
+                break;
+            case self::VERBOSE_VV:
+            case self::VERBOSE_V:
+                echo trim($string).PHP_EOL;
+                break;
+            default: // VERBOSE_DEFAULT
+                echo "F";
+        }
+    }
+    function emit_summary($string)
+    {
+        if($this->verbosity_level > self::VERBOSE_QUIET)
+        {
+            echo $string.PHP_EOL;
         }
     }
 
