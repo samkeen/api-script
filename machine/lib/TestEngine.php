@@ -18,6 +18,7 @@ class TestEngine
     private $verbosity_level = 0;
 
     private $failures = array();
+    private $errors = array();
 
     /**
      * @var ApiHelper
@@ -91,7 +92,7 @@ class TestEngine
      * @param array $expected_property_keys
      * @param bool $empty_response_allowed
      * @param null|int $expected_count
-     * @return array The Resources returned by the Web Service
+     * @return void
      * @throws FailException
      */
     function assert_api_get(
@@ -126,7 +127,6 @@ class TestEngine
         {
             $this->assert_resource_contains_expected_properties($retrieved_resources[0], $expected_property_keys);
         }
-        return $retrieved_resources;
     }
 
     /**
@@ -315,41 +315,52 @@ class TestEngine
                 preg_match('/^(?P<function_name>[^\(]+)/', $eval_function, $match);
                 if( ! $match['function_name'])
                 {
-                    $this->fail("The php eval property value: [{$property_key}] => '{$property_value}' is malformed");
+                    throw new \ErrorException("The php eval property value: [{$property_key}] => '{$property_value}' is malformed");
                 }
                 if( ! function_exists($match['function_name']))
                 {
-                    $this->fail("The the function name ['{$match['function_name']}'] from the php eval property value: '{$property_key}: {$property_value}' is unknown");
+                    throw new \ErrorException("The the function name ['{$match['function_name']}'] from the php eval property value: '{$property_key}: {$property_value}' is unknown");
                 }
                 $property_value = eval("return {$eval_function};");
             }
         }
         return $properties;
     }
-    function fail($message)
+    function fail($test_context, $message)
     {
         $this->emit_fail($message);
-        $this->add_failure($message);
+        $this->failures[$test_context] = $message;
+    }
+    function error($test_context, $message)
+    {
+        $this->emit_error($message);
+        $this->errors[$test_context] = $message;
+    }
+    function get_failures()
+    {
+        return $this->failures;
+    }
+    function get_errors()
+    {
+        return $this->errors;
     }
     private function assert_resource_contains_expected_properties($created_resource, $expected_properties)
     {
         if($missing = array_diff($expected_properties, array_keys($created_resource)))
         {
-            $this->fail("Of the expected properties [".implode(',', $expected_properties)."]"
+            throw new FailException("Of the expected properties [".implode(',', $expected_properties)."]"
                 . " these properties were not found [".implode(',', $missing)."]"
-                . " in the created resource: ".print_r($created_resource, true)
-            );
+                . " in the created resource: ".print_r($created_resource, true));
         }
     }
     private function assert_response_code($code, $request_type)
     {
-        $this->assert_equals(
-            $code,
-            $this->requested_service_response['code'],
-            "The HTTP response code for this {$request_type} request [{$this->requested_service_full_uri}] should have been {$code}, "
+        if($code != $this->requested_service_response['code'])
+        {
+            throw new FailException("The HTTP response code for this {$request_type} request [{$this->requested_service_full_uri}] should have been {$code}, "
                 ."was instead: [{$this->requested_service_response['code']}]\n"
-                ."Response __error: ".print_r($this->get_expected_response_error($this->requested_service_response['body']), true)
-        );
+                ."Response __error: ".print_r($this->get_expected_response_error($this->requested_service_response['body']), true));
+        }
     }
 
     function emit_comment($string)
@@ -396,6 +407,21 @@ class TestEngine
                 echo "F";
         }
     }
+    function emit_error($string)
+    {
+        switch($this->verbosity_level)
+        {
+            case self::VERBOSE_QUIET:
+                // do nothing
+                break;
+            case self::VERBOSE_VV:
+            case self::VERBOSE_V:
+                echo trim($string).PHP_EOL;
+                break;
+            default: // VERBOSE_DEFAULT
+                echo "E";
+        }
+    }
     function emit_summary($string)
     {
         if($this->verbosity_level > self::VERBOSE_QUIET)
@@ -409,7 +435,7 @@ class TestEngine
         if(empty($value))
         {
             $message = $message ?: "The value was empty";
-            $this->fail($message);
+            throw new FailException($message);
         }
     }
     private function assert_empty($value, $message=null)
@@ -417,7 +443,7 @@ class TestEngine
         if( ! empty($value))
         {
             $message = $message ?: "The value [$value] was NOT empty";
-            $this->fail($message);
+            throw new FailException($message);
         }
     }
     private function assert_equals($value1, $value2, $message=null)
@@ -425,13 +451,7 @@ class TestEngine
         if( $value1 != $value2)
         {
             $message = $message ?: "Failed asserting the {$value1} was equal to {$value2}";
-            $this->fail($message);
+            throw new FailException($message);
         }
     }
-
-    private function add_failure($message)
-    {
-        $this->failures[] = $message;
-    }
-
 }
