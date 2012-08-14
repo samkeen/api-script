@@ -8,6 +8,7 @@ spl_autoload_register(
         if ($classes === null) {
             $classes = array(
                 'machinatesting\\apihelper' => '/lib/APIHelper.php',
+                'machinatesting\\failexception' => '/lib/FailException.php',
                 'machinatesting\\testdriver' => '/lib/TestDriver.php',
                 'machinatesting\\testengine' => '/lib/TestEngine.php',
                 'machinatesting\\testsuiterun' => '/lib/TestSuiteRun.php'

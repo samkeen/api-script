@@ -22,7 +22,7 @@ class TestDriver
         {
             $match=null;
             preg_match('/\.(?P<service_name>[^\.]+)\.yaml$/', $manifest_file_path, $match);
-            $this->test_engine->emit("Registering service: '{$match['service_name']}' (file: {$manifest_file_path})");
+            $this->test_engine->emit_comment("Registering service: '{$match['service_name']}' (file: {$manifest_file_path})");
             self::$service_manifests[$match['service_name']] = \Spyc::YAMLLoad($manifest_file_path);
         }
     }
@@ -37,15 +37,15 @@ class TestDriver
         {
             $this->execute_service_tests($service_name, $service_manifest);
         }
-        $this->test_engine->emit("Run time: ".(time() - $this->start_time) . " seconds");
-        $this->test_engine->emit("Memory Usage: ".number_format(memory_get_peak_usage())." bytes");
+        $this->test_engine->emit_summary(PHP_EOL . "Run time: ".(time() - $this->start_time) . " seconds");
+        $this->test_engine->emit_summary("Memory Usage: ".number_format(memory_get_peak_usage())." bytes");
     }
 
     private function execute_service_tests($service_name, $service_manifest)
     {
-        $this->test_engine->emit("Running tests for: '{$service_name}'");
+        $this->test_engine->emit_summary(PHP_EOL . "Running tests for: '{$service_name}'");
         $this->test_engine->service($service_name);
-        $this->test_engine->emit("Found ".count($service_manifest['tests'])." tests");
+        $this->test_engine->emit_summary(PHP_EOL . "Found ".count($service_manifest['tests'])." tests");
         foreach($service_manifest['tests'] as $test_name => $test_meta)
         {
             $path = $this->get_path_from_name($test_name);
@@ -57,7 +57,7 @@ class TestDriver
                         $creation_properties = $this->get_blended_evaluated_creation_properties(
                             $service_manifest, $path, $test_meta
                         );
-                        $this->test_engine->emit("Running Create Then GET Test: '{$test_name}' ({$test_meta['comment']})");
+                        $this->test_engine->emit_comment("Running Create Then GET Test: '{$test_name}' ({$test_meta['comment']})");
                         $this->create_then_get_resource(
                             $path,
                             $creation_properties,
@@ -66,12 +66,12 @@ class TestDriver
                     }
                     else
                     {
-                        $this->test_engine->emit("Running GET Test: '{$test_name}' ({$test_meta['comment']})");
+                        $this->test_engine->emit_comment("Running GET Test: '{$test_name}' ({$test_meta['comment']})");
                         $this->get_all($path);
                     }
                     break;
                 case "post":
-                    $this->test_engine->emit("Running POST Test: '{$test_name}' ({$test_meta['comment']})");
+                    $this->test_engine->emit_comment("Running POST Test: '{$test_name}' ({$test_meta['comment']})");
                     $creation_properties = $this->get_blended_evaluated_creation_properties(
                         $service_manifest, $path, $test_meta
                     );
@@ -81,7 +81,7 @@ class TestDriver
                     );
                     break;
                 case "delete":
-                    $this->test_engine->emit("Running DELETE Test: '{$test_name}' ({$test_meta['comment']})");
+                    $this->test_engine->emit_comment("Running DELETE Test: '{$test_name}' ({$test_meta['comment']})");
                     $creation_properties = $this->get_blended_evaluated_creation_properties(
                         $service_manifest, $path, $test_meta
                     );
@@ -91,7 +91,7 @@ class TestDriver
                     );
                     break;
                 case "patch":
-                    $this->test_engine->emit("Running PATCH Test: '{$test_name}' ({$test_meta['comment']})");
+                    $this->test_engine->emit_comment("Running PATCH Test: '{$test_name}' ({$test_meta['comment']})");
                     $creation_properties = $this->get_blended_evaluated_creation_properties(
                         $service_manifest, $path, $test_meta
                     );
@@ -103,7 +103,7 @@ class TestDriver
                     break;
 
                 case "put":
-                    $this->test_engine->emit("Running PUT Test: '{$test_name}' ({$test_meta['comment']})");
+                    $this->test_engine->emit_comment("Running PUT Test: '{$test_name}' ({$test_meta['comment']})");
                     $creation_properties = $this->get_blended_evaluated_creation_properties(
                         $service_manifest, $path, $test_meta
                     );
@@ -124,11 +124,19 @@ class TestDriver
      */
     private function get_all($path, array $expected_properties=array(), $empty_response_allowed=true)
     {
-        $this->test_engine->assert_api_get(
-            $path,
-            $expected_properties,
-            $empty_response_allowed
-        );
+        try
+        {
+            $this->test_engine->assert_api_get(
+                $path,
+                $expected_properties,
+                $empty_response_allowed
+            );
+            $this->test_engine->emit_pass("Passed");
+        }
+        catch(FailException $e)
+        {
+            $this->test_engine->fail($e->getMessage());
+        }
     }
 
     /**
@@ -138,16 +146,24 @@ class TestDriver
      */
     private function create_then_get_resource($path, array $creation_properties, array $expected_properties=array())
     {
-        $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        if($created_resource['id'])
+        try
         {
-            $this->test_engine->assert_api_get(
-                "{$path}/{$created_resource['id']}",
-                $expected_properties,
-                $empty_response_allowed=true,
-                $expected_count = 1
-            );
-            $this->test_engine->cleanup_resource($path, $created_resource);
+            $created_resource = $this->create_resource_for_testing($path, $creation_properties);
+            if($created_resource['id'])
+            {
+                $this->test_engine->assert_api_get(
+                    "{$path}/{$created_resource['id']}",
+                    $expected_properties,
+                    $empty_response_allowed=true,
+                    $expected_count = 1
+                );
+                $this->test_engine->cleanup_resource($path, $created_resource);
+            }
+            $this->test_engine->emit_pass("Passed");
+        }
+        catch(FailException $e)
+        {
+            $this->test_engine->fail($e->getMessage());
         }
     }
 
@@ -157,10 +173,19 @@ class TestDriver
      */
     private function post_resource($path, array $creation_properties)
     {
-        $this->test_engine->assert_api_post(
-            $path,
-            $this->test_engine->evaluate_property_values($creation_properties)
-        );
+        try
+        {
+            $this->test_engine->assert_api_post(
+                $path,
+                $this->test_engine->evaluate_property_values($creation_properties)
+            );
+            $this->test_engine->emit_pass("Passed");
+        }
+        catch(FailException $e)
+        {
+            $this->test_engine->fail($e->getMessage());
+        }
+
     }
 
     /**
@@ -169,12 +194,20 @@ class TestDriver
      */
     private function delete_resource($path, array $creation_properties)
     {
-        $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        if(isset($created_resource['id']))
+        try
         {
-            $this->test_engine->assert_api_delete(
-                "{$path}/{$created_resource['id']}"
-            );
+            $created_resource = $this->create_resource_for_testing($path, $creation_properties);
+            if(isset($created_resource['id']))
+            {
+                $this->test_engine->assert_api_delete(
+                    "{$path}/{$created_resource['id']}"
+                );
+            }
+            $this->test_engine->emit_pass("Passed");
+        }
+        catch(FailException $e)
+        {
+            $this->test_engine->fail($e->getMessage());
         }
     }
 
@@ -185,13 +218,21 @@ class TestDriver
      */
     private function patch_resource($path, array $creation_properties, array $patch_properties)
     {
-        $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        if(isset($created_resource['id']))
+        try
         {
-            $this->test_engine->assert_api_patch(
-                "{$path}/{$created_resource['id']}",
-                $this->test_engine->evaluate_property_values($patch_properties)
-            );
+            $created_resource = $this->create_resource_for_testing($path, $creation_properties);
+            if(isset($created_resource['id']))
+            {
+                $this->test_engine->assert_api_patch(
+                    "{$path}/{$created_resource['id']}",
+                    $this->test_engine->evaluate_property_values($patch_properties)
+                );
+            }
+            $this->test_engine->emit_pass("Passed");
+        }
+        catch(FailException $e)
+        {
+            $this->test_engine->fail($e->getMessage());
         }
     }
 
@@ -202,14 +243,22 @@ class TestDriver
      */
     private function put_resource($path, array $creation_properties, array $put_properties)
     {
-        $created_resource = $this->create_resource_for_testing($path, $creation_properties);
-        if(isset($created_resource['id']))
+        try
         {
-            $put_properties = $this->test_engine->evaluate_property_values($put_properties);
-            $this->test_engine->assert_api_put(
-                "{$path}/{$created_resource['id']}",
-                array_merge($created_resource, $put_properties)
-            );
+            $created_resource = $this->create_resource_for_testing($path, $creation_properties);
+            if(isset($created_resource['id']))
+            {
+                $put_properties = $this->test_engine->evaluate_property_values($put_properties);
+                $this->test_engine->assert_api_put(
+                    "{$path}/{$created_resource['id']}",
+                    array_merge($created_resource, $put_properties)
+                );
+            }
+            $this->test_engine->emit_pass("Passed");
+        }
+        catch(FailException $e)
+        {
+            $this->test_engine->fail($e->getMessage());
         }
     }
 
