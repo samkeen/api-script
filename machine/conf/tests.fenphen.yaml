@@ -39,7 +39,7 @@ tests:
     PATCH product:
       comment: Test the successful PATCH of a product
       patch_properties:
-        name: php::uniqid()
+        name: php::uniXqid()
 
     PUT product:
       comment: Test the successful PUT of a product

@@ -52,7 +52,7 @@ class TestDriver
         }
         if($errors = $this->test_engine->get_errors())
         {
-            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL . "Failure Summary:");
+            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL . "Error Summary:");
             foreach($errors as $test_context => $error_msg)
             {
                 $error_msg = $this->format_summary_error($error_msg);
@@ -198,6 +198,10 @@ class TestDriver
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
+        catch(\Exception $e)
+        {
+            $this->test_engine->error($this->get_test_context(), $e->getMessage());
+        }
     }
 
     /**
@@ -217,6 +221,10 @@ class TestDriver
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+        }
+        catch(\Exception $e)
+        {
+            $this->test_engine->error($this->get_test_context(), $e->getMessage());
         }
 
     }
@@ -241,6 +249,10 @@ class TestDriver
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+        }
+        catch(\Exception $e)
+        {
+            $this->test_engine->error($this->get_test_context(), $e->getMessage());
         }
     }
 
@@ -267,6 +279,10 @@ class TestDriver
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
         }
+        catch(\Exception $e)
+        {
+            $this->test_engine->error($this->get_test_context(), $e->getMessage());
+        }
     }
 
     /**
@@ -292,6 +308,10 @@ class TestDriver
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+        }
+        catch(\Exception $e)
+        {
+            $this->test_engine->error($this->get_test_context(), $e->getMessage());
         }
     }
 
