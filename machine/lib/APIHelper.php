@@ -1,5 +1,5 @@
 <?php
-namespace DeusTesting;
+namespace MachinaTesting;
 
 class ApiHelper
 {

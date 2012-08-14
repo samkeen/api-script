@@ -1,5 +1,5 @@
 <?php
-namespace DeusTesting;
+namespace MachinaTesting;
 /**
  *
  */
@@ -13,9 +13,9 @@ class TestDriver
     private $start_time;
     private $test_engine = null;
 
-    public function __construct($conf_files_directory, $verbose=false)
+    public function __construct($conf_files_directory, $verbosity_level=0)
     {
-        $this->test_engine = new TestEngine($conf_files_directory, $verbose);
+        $this->test_engine = new TestEngine($conf_files_directory, $verbosity_level);
         // gather manifests
         $manifest_files = glob("{$conf_files_directory}/tests.*.yaml");
         foreach($manifest_files as $manifest_file_path)
@@ -45,6 +45,7 @@ class TestDriver
     {
         $this->test_engine->emit("Running tests for: '{$service_name}'");
         $this->test_engine->service($service_name);
+        $this->test_engine->emit("Found ".count($service_manifest['tests'])." tests");
         foreach($service_manifest['tests'] as $test_name => $test_meta)
         {
             $path = $this->get_path_from_name($test_name);

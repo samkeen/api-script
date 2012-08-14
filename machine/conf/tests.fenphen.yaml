@@ -10,7 +10,7 @@
 #   - finally the test framework issues a Delete request for cleanup
 resource_seeds:
   /product:
-    nameX: php::uniqid()
+    name: php::uniqid()
 
 tests:
     # test names need to be in the format:
@@ -45,3 +45,17 @@ tests:
       comment: Test the successful PUT of a product
       put_properties:
         name: php::uniqid()
+
+    GET all tag:
+      comment: just ensure the get all URL, '/tag' returns 200
+
+    GET tag:
+      comment: Create a tag(POST) then assert you can GET it
+      expected_properties:
+        - id
+        - name
+        - created
+        - modified
+
+    GET all robot:
+      comment: just ensure the get all URL, '/robot' returns 200

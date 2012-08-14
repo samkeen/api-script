@@ -7,9 +7,10 @@ spl_autoload_register(
         static $classes = null;
         if ($classes === null) {
             $classes = array(
-                'deustesting\\apihelper' => '/lib/APIHelper.php',
-                'deustesting\\testdriver' => '/lib/TestDriver.php',
-                'deustesting\\testengine' => '/lib/TestEngine.php'
+                'machinatesting\\apihelper' => '/lib/APIHelper.php',
+                'machinatesting\\testdriver' => '/lib/TestDriver.php',
+                'machinatesting\\testengine' => '/lib/TestEngine.php',
+                'machinatesting\\testsuiterun' => '/lib/TestSuiteRun.php'
             );
         }
         $cn = strtolower($class);

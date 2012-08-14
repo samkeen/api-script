@@ -1,5 +1,5 @@
 <?php
-namespace DeusTesting;
+namespace MachinaTesting;
 /**
  *
  */
@@ -11,7 +11,7 @@ class TestEngine
     private $requested_service_full_uri = null;
     private $services_meta = array();
 
-    private $verbose = false;
+    private $verbosity_level = 0;
 
     private $failures = array();
 
@@ -20,13 +20,14 @@ class TestEngine
      */
     private $api_helper = null;
 
-    function __construct($conf_files_directory, $verbose)
+    function __construct($conf_files_directory, $verbosity_level)
     {
-        $this->verbose = $verbose;
+        $this->verbosity_level = $verbosity_level;
         $services_meta_file_path = "{$conf_files_directory}/services.yaml";
         if( ! file_exists($services_meta_file_path) || ! is_readable($services_meta_file_path))
         {
-            throw new \ErrorException("Conf file not found and/or not readable at: {$services_meta_file_path}");
+            echo("Conf file not found and/or not readable at: {$services_meta_file_path}\n");
+            exit(1);
         }
         $this->services_meta = \Spyc::YAMLLoad($services_meta_file_path);;
         $this->validate_conf($this->services_meta);
@@ -189,7 +190,6 @@ class TestEngine
 
     /**
      * @param array $conf
-     * @throws \ErrorException
      */
     private function validate_conf(array $conf = array())
     {
@@ -199,25 +199,29 @@ class TestEngine
              */
             if( ! isset($host_meta['base_domain_path']))
             {
-                throw new \ErrorException("`base_domain_path` for host [{$host_name}] from conf-blackbox.php must include protocol (http:// or https://)");
+                echo("`base_domain_path` for host [{$host_name}] from services.yaml must include protocol (http:// or https://)\n");
+                exit(1);
             }
             if( ! array_key_exists('api_prefix_path', $host_meta))
             {
-                throw new \ErrorException("the key: `api_prefix_path` for host [{$host_name}] from conf-blackbox.php was not found");
+                echo ("the key: `api_prefix_path` for host [{$host_name}] from services.yaml was not found\n");
+                exit(1);
             }
             if( ! preg_match('%^https?://.*%', $host_meta['base_domain_path']))
             {
-                throw new \ErrorException(
-                    "`base_domain_path` for host [{$host_name}] from conf-blackbox.php must include protocol (http:// or https://)\n"
-                    ."Value found: [{$host_meta['base_domain_path']}]"
+                echo(
+                    "`base_domain_path` for host [{$host_name}] from services.yaml must include protocol (http:// or https://)\n"
+                    ."Value found: [{$host_meta['base_domain_path']}]\n"
                 );
+                exit(1);
             }
             /*
              * validate `username` & `password`
              */
             if( ! array_key_exists('username', $host_meta) ||  ! array_key_exists('password', $host_meta))
             {
-                throw new \ErrorException("`username` and/or `password` key missing for host [{$host_name}] from conf-blackbox.php");
+                echo("`username` and/or `password` key missing for host [{$host_name}] from services.yaml\n");
+                exit(1);
             }
         }
     }
@@ -246,10 +250,11 @@ class TestEngine
         $service_meta = isset($this->services_meta[$host_name]) ? $this->services_meta[$host_name] : null;
         if( ! $service_meta)
         {
-            throw new \ErrorException(
-                "no service meta found for service name: [{$host_name}] in conf-blackbox.php.\n"
-                    ."Known service host names: ".implode(",", array_keys($this->services_meta))
+            echo(
+                "no service meta found for service name: [{$host_name}] in services.yaml.\n"
+                    ."Known service host names: ".implode(",", array_keys($this->services_meta))."\n"
             );
+            exit(1);
         }
         return $service_meta;
     }
@@ -344,7 +349,7 @@ class TestEngine
 
     function emit($string)
     {
-        if($this->verbose)
+        if($this->verbosity_level)
         {
             echo trim($string).PHP_EOL;
         }
@@ -368,7 +373,7 @@ class TestEngine
     }
     private function assert_equals($value1, $value2, $message=null)
     {
-        if( ! $value1 == $value2)
+        if( $value1 != $value2)
         {
             $message = $message ?: "Failed asserting the {$value1} was equal to {$value2}";
             $this->fail($message);
