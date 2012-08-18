@@ -11,18 +11,29 @@ class TestDriver
      * @var int
      */
     private $start_time;
+    /**
+     * @var TestEngine|null
+     */
     private $test_engine = null;
+    /**
+     * @var Colors|null
+     */
+    private $colors = null;
 
     private $current_test_manifest;
     private $current_test_name;
 
-    public function __construct($conf_files_directory, $verbosity_level=0)
+    private $total_test_count;
+
+    public function __construct($conf_files_directory, $verbosity_level=0, Colors $colors)
     {
         $this->test_engine = new TestEngine($conf_files_directory, $verbosity_level);
+        $this->colors = $colors;
         // gather manifests
         $manifest_files = glob("{$conf_files_directory}/tests.*.yaml");
         foreach($manifest_files as $manifest_file_path)
         {
+            $this->test_engine->emit_detail("Found Manifest File: {$manifest_file_path}");
             $match=null;
             preg_match('/\.(?P<service_name>[^\.]+)\.yaml$/', $manifest_file_path, $match);
             $this->test_engine->emit_comment("Registering service: '{$match['service_name']}' (file: {$manifest_file_path})");
@@ -39,24 +50,62 @@ class TestDriver
         $this->start_time = time();
         foreach(self::$service_manifests as $service_name => $service_manifest)
         {
+            $s = count(self::$service_manifests)>1 ? "s" : "";
+            $this->test_engine->emit_detail(count(self::$service_manifests)." Manifest file{$s} to process");
             $this->execute_service_tests($service_name, $service_manifest);
         }
-        if($failures = $this->test_engine->get_failures())
+        /*
+         * echo quick summary
+         *
+         * i.e
+         *
+         * FAILURES!
+         * Tests: 2, Assertions: 1, Failures: 1.
+         *
+         * or
+         *
+         * OK (1 test, 1 assertion)
+         *
+         */
+        $passes_count = count($this->test_engine->get_passes());
+        $failures = $this->test_engine->get_failures();
+        $errors = $this->test_engine->get_errors();
+        if($failures || $errors)
         {
-            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL . "Failure Summary:");
+            $fail_count = count($failures);
+            $error_count = count($errors);
+            $this->test_engine->emit_summary(PHP_EOL
+                . $this->colors->getColoredString("FAILURES", 'red')
+                . " (Tests: {$this->total_test_count}, Passes: {$passes_count}, Fails: {$fail_count}, Errors: {$error_count})"
+            );
+        }
+        else
+        {
+            $this->test_engine->emit_summary(PHP_EOL
+                . $this->colors->getColoredString("OK", 'green')
+                . " (Tests: {$this->total_test_count})"
+            );
+        }
+        if($failures)
+        {
+            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL
+                . $this->colors->getColoredString("Failure Detail:", 'red')
+            );
             foreach($failures as $test_context => $failure_msg)
             {
                 $failure_msg = $this->format_summary_error($failure_msg);
-                $this->test_engine->emit_summary(PHP_EOL . "\t[{$test_context}]\t\"{$failure_msg}\"");
+                $this->test_engine->emit_summary(PHP_EOL . "[{$test_context}]\n{$failure_msg}");
             }
         }
-        if($errors = $this->test_engine->get_errors())
+        if($errors)
         {
-            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL . "Error Summary:");
+            $this->test_engine->emit_summary(PHP_EOL . PHP_EOL
+                . $this->colors->getColoredString("Error Detail:", 'red')
+            );
             foreach($errors as $test_context => $error_msg)
             {
                 $error_msg = $this->format_summary_error($error_msg);
-                $this->test_engine->emit_summary(PHP_EOL . "\t[{$test_context}]\t\t\"{$error_msg}\"");
+                $this->test_engine->emit_summary(PHP_EOL . "[{$test_context}]\n{$error_msg}");
             }
         }
         $this->test_engine->emit_summary(PHP_EOL . "Run time: ".(time() - $this->start_time) . " seconds");
@@ -68,6 +117,7 @@ class TestDriver
         $this->current_test_manifest = $service_manifest['manifest_filename'];
         $this->test_engine->emit_summary(PHP_EOL . "Running tests for: '{$service_name}'");
         $this->test_engine->service($service_name);
+        $this->total_test_count += count($service_manifest['tests']);
         $this->test_engine->emit_summary(PHP_EOL . "Found ".count($service_manifest['tests'])." tests");
         foreach($service_manifest['tests'] as $test_name => $test_meta)
         {
@@ -160,15 +210,18 @@ class TestDriver
                 $expected_properties,
                 $empty_response_allowed
             );
-            $this->test_engine->emit_pass("Passed");
+            $this->test_engine->pass($this->get_test_context(), "Passed");
+            $this->test_engine->emit_detail("-------------");
         }
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
         catch(\Exception $e)
         {
             $this->test_engine->error($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
     }
 
@@ -192,15 +245,18 @@ class TestDriver
                 );
                 $this->test_engine->cleanup_resource($path, $created_resource);
             }
-            $this->test_engine->emit_pass("Passed");
+            $this->test_engine->pass($this->get_test_context(), "Passed");
+            $this->test_engine->emit_detail("-------------");
         }
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
         catch(\Exception $e)
         {
             $this->test_engine->error($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
     }
 
@@ -216,17 +272,19 @@ class TestDriver
                 $path,
                 $this->test_engine->evaluate_property_values($creation_properties)
             );
-            $this->test_engine->emit_pass("Passed");
+            $this->test_engine->pass($this->get_test_context(), "Passed");
+            $this->test_engine->emit_detail("-------------");
         }
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
         catch(\Exception $e)
         {
             $this->test_engine->error($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
-
     }
 
     /**
@@ -244,15 +302,18 @@ class TestDriver
                     "{$path}/{$created_resource['id']}"
                 );
             }
-            $this->test_engine->emit_pass("Passed");
+            $this->test_engine->pass($this->get_test_context(), "Passed");
+            $this->test_engine->emit_detail("-------------");
         }
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
         catch(\Exception $e)
         {
             $this->test_engine->error($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
     }
 
@@ -273,15 +334,18 @@ class TestDriver
                     $this->test_engine->evaluate_property_values($patch_properties)
                 );
             }
-            $this->test_engine->emit_pass("Passed");
+            $this->test_engine->pass($this->get_test_context(), "Passed");
+            $this->test_engine->emit_detail("-------------");
         }
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
         catch(\Exception $e)
         {
             $this->test_engine->error($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
     }
 
@@ -303,15 +367,18 @@ class TestDriver
                     array_merge($created_resource, $put_properties)
                 );
             }
-            $this->test_engine->emit_pass("Passed");
+            $this->test_engine->pass($this->get_test_context(), "Passed");
+            $this->test_engine->emit_detail("-------------");
         }
         catch(FailException $e)
         {
             $this->test_engine->fail($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
         catch(\Exception $e)
         {
             $this->test_engine->error($this->get_test_context(), $e->getMessage());
+            $this->test_engine->emit_detail("-------------");
         }
     }
 
@@ -322,11 +389,14 @@ class TestDriver
      */
     private function create_resource_for_testing($path, array $creation_properties)
     {
-        return $this->test_engine->assert_api_post(
+        $this->test_engine->emit_detail("Creating resource for test ({$path})");
+        $created_resource = $this->test_engine->assert_api_post(
             $path,
             $this->test_engine->evaluate_property_values($creation_properties),
             $clean_up = false
         );
+        $this->test_engine->emit_detail("Resource Created ({$path}/{$created_resource['id']})");
+        return $created_resource;
     }
 
     /**
@@ -381,7 +451,7 @@ class TestDriver
     private function get_blended_evaluated_creation_properties(array $service_manifest, $path, array $test_meta)
     {
         return $this->get_evaluated_creation_properties(
-            isset($service_manifest['resource_seeds'][$path])?$service_manifest['resource_seeds'][$path]:array(),
+            isset($service_manifest['resource_templates'][$path])?$service_manifest['resource_templates'][$path]:array(),
             isset($test_meta['creation_properties'])?$test_meta['creation_properties']:array()
         );
     }
@@ -390,12 +460,13 @@ class TestDriver
         $fail_first_line = $fail_remaining_lines = "";
         $failure_msg = (array)explode(PHP_EOL, $failure_msg);
         $fail_first_line = array_shift($failure_msg);
+        $fail_first_line = wordwrap($fail_first_line, 80, PHP_EOL, $cut = false);
         if($failure_msg)
         {
             $failure_msg = array_map(
                 function($val)
                 {
-                    return "\t\t\t{$val}";
+                    return "\t{$val}";
                 },
                 $failure_msg
             );

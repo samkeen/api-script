@@ -1,4 +1,4 @@
-# service1 Service
+# Fenphen Service
 
 # for any interaction (PUT|PATCH|DELETE) with a Resource, there must
 #   first be a Resource, these are the properties to use to create those
