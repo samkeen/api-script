@@ -17,6 +17,7 @@ class TestEngine
 
     private $verbosity_level = 0;
 
+    private $passes = array();
     private $failures = array();
     private $errors = array();
 
@@ -69,6 +70,7 @@ class TestEngine
         $this->requested_service_response = $this->api_helper->api_post(
             $this->requested_service_full_uri, $payload, $service_meta['username'], $service_meta['password']
         );
+        $this->emit_detail("Response Body: {$this->requested_service_response['body']}");
         $created_resource = json_decode($this->requested_service_response['body'], true);
         $this->assert_response_code(201, 'POST');
         $this->assert_not_empty($created_resource, "The created Resource was found to be Empty");
@@ -105,6 +107,7 @@ class TestEngine
         $this->requested_service_response = $this->api_helper->api_get(
             $this->requested_service_full_uri, $service_meta['username'], $service_meta['password']
         );
+        $this->emit_detail("Response Body: {$this->requested_service_response['body']}");
         $retrieved_resources = json_decode($this->requested_service_response['body'], true);
         $this->assert_response_code(200, 'GET');
         if( ! $empty_response_allowed && ! $retrieved_resources)
@@ -243,6 +246,7 @@ class TestEngine
         $api_prefix_path = $api_path_prefix
             ? "/" .ltrim($api_path_prefix, ' /')
             : '';
+        $this->emit_detail("Constructed full URI: {$base_service_path}{$api_prefix_path}{$request_path}");
         return "{$base_service_path}{$api_prefix_path}{$request_path}";
     }
     /**
@@ -303,6 +307,7 @@ class TestEngine
      */
     function cleanup_resource($request_path, $created_resource)
     {
+        $this->emit_detail("Cleaning up (DELETE) Resource {$request_path}/{$created_resource['id']}");
         $this->assert_api_delete("{$request_path}/{$created_resource['id']}");
     }
     function evaluate_property_values(array $properties)
@@ -326,6 +331,11 @@ class TestEngine
         }
         return $properties;
     }
+    function pass($test_context, $message)
+    {
+        $this->emit_pass($message);
+        $this->passes[$test_context] = $message;
+    }
     function fail($test_context, $message)
     {
         $this->emit_fail($message);
@@ -335,6 +345,10 @@ class TestEngine
     {
         $this->emit_error($message);
         $this->errors[$test_context] = $message;
+    }
+    function get_passes()
+    {
+        return $this->passes;
     }
     function get_failures()
     {
@@ -352,6 +366,7 @@ class TestEngine
                 . " these properties were not found [".implode(',', $missing)."]"
                 . " in the created resource: ".print_r($created_resource, true));
         }
+        $this->emit_detail("Asserted Expected properties [".implode(', ', $expected_properties)."] were found in response Resource");
     }
     private function assert_response_code($code, $request_type)
     {
@@ -361,6 +376,7 @@ class TestEngine
                 ."was instead: [{$this->requested_service_response['code']}]\n"
                 ."Response __error: ".print_r($this->get_expected_response_error($this->requested_service_response['body']), true));
         }
+        $this->emit_detail("Asserted expected Response code [{$code}] matched recieved: {$this->requested_service_response['code']}");
     }
 
     function emit_comment($string)
@@ -401,7 +417,7 @@ class TestEngine
                 break;
             case self::VERBOSE_VV:
             case self::VERBOSE_V:
-                echo trim($string).PHP_EOL;
+                echo "FAIL: " . trim($string).PHP_EOL;
                 break;
             default: // VERBOSE_DEFAULT
                 echo "F";
@@ -416,7 +432,7 @@ class TestEngine
                 break;
             case self::VERBOSE_VV:
             case self::VERBOSE_V:
-                echo trim($string).PHP_EOL;
+                echo "ERROR: " . trim($string).PHP_EOL;
                 break;
             default: // VERBOSE_DEFAULT
                 echo "E";
@@ -445,6 +461,7 @@ class TestEngine
             $message = $message ?: "The value [$value] was NOT empty";
             throw new FailException($message);
         }
+        $this->emit_detail("Asserted response body was empty");
     }
     private function assert_equals($value1, $value2, $message=null)
     {

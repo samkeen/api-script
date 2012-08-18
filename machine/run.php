@@ -1,4 +1,5 @@
 <?php
+namespace MachinaTesting;
 /**
  *
  */
@@ -8,7 +9,8 @@ require_once __DIR__ . "/../vendor/spyc/spyc.php";
 
 $verbosity_level = get_requested_verbosity();
 
-$tester = new \MachinaTesting\TestDriver(__DIR__."/conf", $verbosity_level);
+$colors = new Colors();
+$tester = new TestDriver(__DIR__."/conf", $verbosity_level, $colors);
 $tester->run_tests();
 /**
  * Determine if the given $param_key exists in the cli command
