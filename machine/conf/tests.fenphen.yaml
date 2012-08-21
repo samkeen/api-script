@@ -26,7 +26,7 @@ tests:
     GET all product:
       comment: just ensure the get all URL, '/product' returns 200
 
-    GET product:
+    GET a single product:
       comment: Create a product(POST) then assert you can GET it
       expected_properties:
         - id
