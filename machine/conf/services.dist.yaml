@@ -5,8 +5,8 @@
 #     ...
 #
 # The {service_name} name HAS TO match what is in tests.{service}.yaml
-fenphen:
-  username: {{fenphen_user_name}}
-  password: {{fenphen_password}}
-  base_domain_path: {{fenphen_base_domain_path}}
-  api_prefix_path: {{fenphen_api_prefix_path}}
+service1:
+  username: {{service1_user_name}}
+  password: {{service1_password}}
+  base_domain_path: {{service1_base_domain_path}}
+  api_prefix_path: {{service1_api_prefix_path}} 
